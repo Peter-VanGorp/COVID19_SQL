@@ -2,8 +2,6 @@
 
 --data from https://www150.statcan.gc.ca/n1/en/catalogue/13260003
 
---canada pop 38.25M for this project
-
 --9 or 99 is used as dummy value for week and year categories, when value unknown
 
 
@@ -73,34 +71,25 @@ CREATE TABLE covid_data_raw
 (case_id INT PRIMARY KEY, region_id INT, week INT, week_group INT, year INT,
 gender_id INT, age_group_id INT, hospital_status_id INT, death_id INT);
 
-COPY covid_data_raw FROM 'C:\Users\pvang\Desktop\SQL_Project\COVID19-eng.csv' WITH DELIMITER ',' CSV HEADER;
+COPY covid_data_raw FROM 'C:\Users\pvang\Desktop\COVID19_SQL\COVID19-eng.csv' WITH DELIMITER ',' CSV HEADER;
 
 --create view 
 DROP VIEW IF EXISTS covid_data;
 
 CREATE VIEW covid_data AS
 SELECT case_id, region, year, week, gender, age_group, hospital_status, death
-FROM 
-	covid_data_raw	
+FROM covid_data_raw	
 	JOIN genders ON covid_data_raw.gender_id = genders.gender_id
 	JOIN regions ON covid_data_raw.region_id = regions.region_id
 	JOIN age_groups ON covid_data_raw.age_group_id = age_groups.age_group_id
 	JOIN hospital_states ON covid_data_raw.hospital_status_id = hospital_states.hospital_status_id
 	JOIN death_states ON covid_data_raw.death_id = death_states.death_id
 ;
+
+
 /* **************************************************************************** */
---now the fun begins 
 
-/*
 
----Q's---
--death % by age group
--infection by region
--new infections over time
--peak infection/death time points
--hospitalizaion over time
-
-*/
 
 -- quick peek at base table view we'll be working from
 
@@ -149,12 +138,47 @@ SELECT year, week, COUNT(*) AS new_infections,
 		   ELSE 0 END) AS hospitalized,
 	   SUM(CASE death WHEN 'Yes' THEN 1 ELSE 0 END) AS deaths
 FROM covid_data
-WHERE year != 99 and week != 99
+WHERE year != 99 AND week != 99
 GROUP BY year, week;
 
 
---monthly avg of some stat or even avg of col? WIP
---maybe rolling 3 week avg to smooth curve 
+--weekly and running total for infections, hospitalization and deaths all together for export
+
+WITH weekly_counts AS (
+
+	SELECT year, week, COUNT(*) AS new_infections,
+	   SUM(CASE hospital_status 
+		   WHEN 'ICU' THEN 1
+		   WHEN 'Non-emergency' THEN 1
+		   ELSE 0 END) AS hospitalized,
+	   SUM(CASE death WHEN 'Yes' THEN 1 ELSE 0 END) AS deaths
+	FROM covid_data
+	WHERE year != 99 AND week != 99
+	GROUP BY year, week
+)
+
+SELECT year, week, 
+new_infections, SUM(new_infections) OVER (ORDER BY year, week) AS total_infections,
+hospitalized, SUM(hospitalized) OVER (ORDER BY year, week) AS total_hospitalized,
+deaths, SUM(deaths) OVER (ORDER BY year, week) AS total_deaths
+FROM weekly_counts
+WHERE year !=99 AND week !=99
+ORDER BY year, week;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
